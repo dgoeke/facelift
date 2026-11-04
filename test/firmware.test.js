@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  PRESETS, ROWS, PLAIN_SHA256, SOURCE_SHA256, buildImage, curveFromPoints, factoryPoints,
-  pickSource, readFactoryCurves, rowsFor, sha256, sysexSchedule, toSettings,
+  PAGE_OPTIONS, PRESETS, ROWS, PLAIN_SHA256, SOURCE_SHA256, buildFromPage, buildImage, curveFromPoints, describeBuild,
+  factoryPoints, pickSource, readFactoryCurves, rowsFor, sha256, sysexSchedule, toSettings,
 } from '../src/firmware.js';
 
 const path = process.env.FACELIFT_SOURCE;
@@ -33,6 +33,44 @@ test('No mapping on rows without a factory curve changes nothing', needsSource, 
 });
 
 const original = { piano: false };
+
+test('the page starts on the full volume piano build, and says so', needsSource, async () => {
+  assert.equal(await sha256(buildFromPage(source, {}, PAGE_OPTIONS)),
+    'd11b28e6fe510add4d00e77e726a2051c6808ee0534ed6ab7e036e63bc40907d');
+  assert.equal(describeBuild({}, PAGE_OPTIONS), 'All factory, with Toy playing the piano at full volume.');
+});
+
+test('what the page says matches what it builds, for every piano and volume choice', needsSource, async () => {
+  const cases = [
+    [{ piano: true, loud: true }, 'd11b28e6fe510add4d00e77e726a2051c6808ee0534ed6ab7e036e63bc40907d', 'All factory, with Toy playing the piano at full volume.'],
+    [{ piano: true, loud: false }, PLAIN_SHA256, 'All factory, with Toy playing the piano.'],
+    [{ piano: false, loud: true }, SOURCE_SHA256, 'The original firmware, with nothing changed.'],
+    [{ piano: false, loud: false }, SOURCE_SHA256, 'The original firmware, with nothing changed.'],
+  ];
+  for (const [options, hash, text] of cases) {
+    assert.equal(await sha256(buildFromPage(source, {}, options)), hash);
+    assert.equal(describeBuild({}, options), text);
+  }
+});
+
+test('the description lists changed rows and how Toy plays', () => {
+  const state = { rhodes1: { checked: true, mode: 'curve', menu: 'Bolder' }, wurli: { checked: true, mode: 'none' } };
+  assert.equal(describeBuild(state, { piano: true, loud: true }),
+    'Rhodes 1: Bolder · Wurli: No mapping · others factory · Toy plays the piano at full volume');
+  assert.equal(describeBuild(state, { piano: true, loud: false }),
+    'Rhodes 1: Bolder · Wurli: No mapping · others factory · Toy plays the piano');
+  assert.equal(describeBuild(state, { piano: false, loud: true }),
+    'Rhodes 1: Bolder · Wurli: No mapping · others factory · Toy keeps its own sound');
+});
+
+test('full volume reproduces the hardware-proven image', needsSource, async () => {
+  assert.equal(await sha256(buildImage(source, {}, { loud: true })),
+    'd11b28e6fe510add4d00e77e726a2051c6808ee0534ed6ab7e036e63bc40907d');
+});
+
+test('full volume changes nothing with the piano off', needsSource, async () => {
+  assert.equal(await sha256(buildImage(source, {}, { piano: false, loud: true })), SOURCE_SHA256);
+});
 
 test('with the piano off and no settings, the output is the original file', needsSource, async () => {
   assert.equal(await sha256(buildImage(source, {}, original)), SOURCE_SHA256);

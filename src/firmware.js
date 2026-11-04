@@ -11,6 +11,7 @@ const SECTIONS = [[0, 0x2A0000], [0x2C0000, 0x440000]];
 const CURVES = 0x2E8778;  // six 128-entry velocity curves
 const NO_CURVE = 0xFFFF;
 const TOY_EDITS = [[0x1F672B, 0x01, 0x00], [0x1F672D, 0x09, 0x00]];  // [offset, v1.30 value, new value]
+const LOUD_EDIT = [0x1F672F, 0x4A, 0x7F];  // the Toy record's part volume: 74 suits the Toy sound and leaves the piano 9.4 dB down
 
 // `field` holds the voice's curve number (big-endian u16). `factory` is its value in v1.30.
 export const ROWS = [
@@ -51,6 +52,12 @@ export function readFactoryCurves(source, options) {
 export function factoryPoints(table) {
   return PRESETS['Exactly as played'].map(([x, y]) => [x, table ? table[x] : y]);
 }
+
+/** The menu choice a row starts on: its factory curve, or the straight line if it has none. */
+export const startingMenu = row => (row.factoryCurve ? 'Factory' : 'Exactly as played');
+
+/** What the page's options start as. buildImage's own defaults stay on the plain build. */
+export const PAGE_OPTIONS = { piano: true, loud: true };
 
 /** Turn the page's per-row state into build settings. Anything that would change nothing is left out. */
 export function toSettings(state, options) {
@@ -234,7 +241,7 @@ export function curveFromPoints(points) {
 }
 
 /** The image edits for these settings, as a Map of offset to value. Refuses a source that isn't as expected. */
-function editsFor(image, settings, { piano = true } = {}) {
+function editsFor(image, settings, { piano = true, loud = false } = {}) {
   const rows = rowsFor({ piano }), known = new Set(rows.map(r => r.key));
   for (const key of Object.keys(settings)) if (!known.has(key)) throw new Error(`Unknown sound: ${key}`);
   const edits = new Map();
@@ -242,6 +249,9 @@ function editsFor(image, settings, { piano = true } = {}) {
     if (image[offset] !== old) throw new Error('The firmware is not as expected.');
     if (piano) edits.set(offset, value);
   }
+  const [loudOffset, loudOld, loudValue] = LOUD_EDIT;
+  if (image[loudOffset] !== loudOld) throw new Error('The firmware is not as expected.');
+  if (piano && loud) edits.set(loudOffset, loudValue);
   for (const row of rows) {
     if ((image[row.field] << 8 | image[row.field + 1]) !== row.factory) throw new Error('The firmware is not as expected.');
     const setting = settings[row.key];
@@ -299,7 +309,7 @@ function verify(source, data, before, intended, edits, settings, options) {
   for (let i = 0; i < data.length; i++) if (data[i] !== source[i] && !open[i]) throw new Error('The file changed outside the firmware data.');
 }
 
-/** Build the file to flash from these settings, with the Toy to Piano patch unless piano is false. Throws if any check fails. */
+/** Build the file to flash from these settings, with the Toy to Piano patch unless piano is false, and that piano at full volume if loud is true. Throws if any check fails. */
 export function buildImage(source, settings, options) {
   const before = decodedSource(source), image = before.slice(), edits = editsFor(before, settings, options);
   for (const [offset, value] of edits) image[offset] = value;
@@ -309,4 +319,22 @@ export function buildImage(source, settings, options) {
   const data = encode(source, before, image);
   verify(source, data, before, image, edits, settings, options);
   return data;
+}
+
+/** Build from the page's state. It shares its options with describeBuild, so the two can't disagree. */
+export function buildFromPage(source, state, options) {
+  return buildImage(source, toSettings(state, options), options);
+}
+
+/** The page's one-line description of the build these options and state give. */
+export function describeBuild(state, { piano, loud }) {
+  const level = loud ? ' at full volume' : '', parts = [], toy = piano ? `Toy plays the piano${level}` : 'Toy keeps its own sound';
+  for (const row of rowsFor({ piano })) {
+    const s = state[row.key];
+    if (!s?.checked) continue;
+    if (s.mode === 'none') parts.push(`${row.label}: No mapping`);
+    else if (s.menu !== startingMenu(row)) parts.push(`${row.label}: ${s.menu}`);
+  }
+  if (!parts.length) return piano ? `All factory, with Toy playing the piano${level}.` : 'The original firmware, with nothing changed.';
+  return [...parts, ...(parts.length < ROWS.length ? ['others factory'] : []), toy].join(' · ');
 }

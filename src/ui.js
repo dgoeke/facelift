@@ -1,5 +1,5 @@
 // The page: loading the updater, the curve editor, and flashing.
-import { PRESETS, ROWS, buildImage, curveFromPoints, factoryPoints, pickSource, readFactoryCurves, rowsFor, sha256, sysexSchedule, toSettings } from './firmware.js';
+import { PAGE_OPTIONS, PRESETS, ROWS, buildFromPage, curveFromPoints, describeBuild, factoryPoints, pickSource, readFactoryCurves, rowsFor, sha256, startingMenu, sysexSchedule } from './firmware.js';
 import { createSender, isRefusedPort } from './send.js';
 
 const $ = id => document.getElementById(id);
@@ -10,7 +10,7 @@ const KEY_REBUILD_DELAY_MS = 300;
 
 let source = null;   // the v1.30 file
 let factory = null;  // its factory curves, read when it first loads
-let piano = true;    // whether Toy plays the hidden piano
+let { piano, loud } = PAGE_OPTIONS;  // whether Toy plays the hidden piano, and whether that piano is at full volume
 let image = null;    // the checked file to flash, or null
 let midi = null;
 let sending = false;
@@ -21,6 +21,7 @@ let rebuildTimer = null;
 // Nothing else from an earlier visit is kept, so its ticks must not be either. autocomplete="off" in index.html
 // stops Chrome, which restores controls after this runs. These lines cover a browser that restores before it.
 $('piano').checked = piano;
+$('loud').checked = loud;
 $('confirmed').checked = false;
 
 function log(text, kind = '') {
@@ -84,7 +85,6 @@ const state = {};  // per-row settings, filled in once the factory curves are kn
 
 const rows = () => rowsFor({ piano });
 const factoryTable = row => (row.factoryCurve ? factory[row.key] : undefined);
-const startingMenu = row => (row.factoryCurve ? 'Factory' : 'Exactly as played');
 
 function svgElement(parent, name, attributes = {}, text = '') {
   const element = document.createElementNS(SVG_NS, name);
@@ -229,6 +229,7 @@ function showCurves() {
 $('piano').addEventListener('change', event => {
   const toyRow = () => rows().find(row => row.key === 'toy'), s = state.toy, onStart = s.menu === startingMenu(toyRow());
   piano = event.target.checked;
+  $('loud').disabled = !piano;
   if (onStart) {
     s.menu = startingMenu(toyRow());
     s.points = factoryPoints(factoryTable(toyRow()));
@@ -237,17 +238,13 @@ $('piano').addEventListener('change', event => {
   rebuild();
 });
 
-function summary() {
-  const parts = [], toy = piano ? 'Toy plays the piano' : 'Toy keeps its own sound';
-  for (const row of rows()) {
-    const s = state[row.key];
-    if (!s?.checked) continue;
-    if (s.mode === 'none') parts.push(`${row.label}: No mapping`);
-    else if (s.menu !== startingMenu(row)) parts.push(`${row.label}: ${s.menu}`);
-  }
-  if (!parts.length) return piano ? 'All factory, with Toy playing the piano.' : 'The original firmware, with nothing changed.';
-  return [...parts, ...(parts.length < ROWS.length ? ['others factory'] : []), toy].join(' · ');
-}
+$('loud').addEventListener('change', event => {
+  loud = event.target.checked;
+  rebuild();
+});
+
+const options = () => ({ piano, loud });  // the one set of options the build and its description both use
+const summary = () => describeBuild(state, options());
 
 function refreshSummary() {
   $('summaryText').textContent = summary();
@@ -277,7 +274,7 @@ async function rebuild() {
     status.textContent = 'Load the updater to build an image.';
   } else {
     try {
-      const built = buildImage(source, toSettings(state, { piano }), { piano });
+      const built = buildFromPage(source, state, options());
       const digest = await sha256(built);
       if (token !== buildToken) return;
       image = built;
