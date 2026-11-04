@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>facelift</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1c1b19; --muted: #6b6862; --line: #dcd9d2;
+    --accent: #b4481f; --accent-ink: #ffffff; --curve: #b4481f; --ref: #8d8a83; --grid: #e9e6df;
+    --ok: #1f7a3d; --bad: #b3261e; --tint: #efece6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171614; --panel: #201f1c; --ink: #efece6; --muted: #a09c94; --line: #3a3833;
+      --accent: #e8794a; --accent-ink: #1c1208; --curve: #e8794a; --ref: #8b877f; --grid: #2e2c28;
+      --ok: #5fc47f; --bad: #ff8a80; --tint: #2a2825;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 28px 16px 64px; }
+  h1 { font-size: 30px; line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 6px; }
+  h2 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 10px; color: var(--muted); }
+  h3 { font-size: 15px; margin: 16px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+  p { margin: 0 0 10px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 16px; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  fieldset:disabled { opacity: 0.55; }
+  fieldset:disabled svg { pointer-events: none; }
+  .lede { font-size: 16px; }
+  .note { color: var(--muted); font-size: 13px; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow-wrap: anywhere; }
+  button, .button { font: inherit; padding: 6px 14px; border-radius: 7px; border: 1px solid var(--line); background: var(--tint); color: var(--ink); cursor: pointer; display: inline-block; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  select { font: inherit; padding: 4px 6px; max-width: 100%; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+  #drop { border: 2px dashed var(--line); border-radius: 8px; padding: 26px 14px; text-align: center; }
+  #drop.over { border-color: var(--accent); background: var(--tint); }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .row { border-top: 1px solid var(--line); padding: 10px 0; }
+  .row:first-of-type { border-top: 0; }
+  .head { display: flex; align-items: baseline; gap: 10px; cursor: pointer; }
+  .head .name { font-weight: 600; }
+  .body { margin: 8px 0 0 24px; }
+  .body > label { display: block; margin: 4px 0; }
+  .editor { margin: 8px 0 0 24px; }
+  .editor svg { display: block; width: 100%; max-width: 340px; margin-top: 8px; touch-action: none; }
+  .plot { fill: var(--panel); stroke: var(--line); }
+  .grid { stroke: var(--grid); }
+  .ref { fill: none; stroke: var(--ref); }
+  .current { fill: none; stroke: var(--curve); stroke-width: 2.5; stroke-linejoin: round; }
+  .point { fill: var(--curve); stroke: var(--panel); stroke-width: 2; cursor: grab; }
+  .point:focus-visible { outline: none; stroke: var(--ink); }
+  .hit { fill: transparent; cursor: grab; }
+  .axis { fill: var(--muted); font-size: 11px; }
+  #summary { background: var(--tint); border-radius: 7px; padding: 8px 10px; margin-top: 12px; }
+  progress { width: 100%; height: 10px; accent-color: var(--accent); }
+  #log { white-space: pre-wrap; max-height: 220px; overflow: auto; margin-top: 10px; }
+  #log:empty { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>facelift</h1>
+  <p class="lede">Change the touch of each sound on a certain compact 37-key electric piano, and optionally make the Toy setting play a hidden piano.</p>
+  <p class="note">Unofficial, and not made, endorsed or supported by the manufacturer. Flashing modified firmware can leave a keyboard unusable and may affect warranty or support. There is no warranty, and you use this entirely at your own risk. Everything runs in this page: your files stay on your computer.</p>
+
+  <section>
+    <h2>1. Original updater</h2>
+    <fieldset id="updaterControls">
+      <p>Unzip the v1.30 firmware updater you downloaded, then drop its folder here.</p>
+      <div id="drop">Drop the updater folder, its app, or its .dat file</div>
+      <div class="actions">
+        <label class="button">Choose folder…<input class="visually-hidden" type="file" id="pickFolder" autocomplete="off" webkitdirectory></label>
+        <label class="button">Choose .dat file…<input class="visually-hidden" type="file" id="pickFile" autocomplete="off" accept=".dat"></label>
+      </div>
+      <p class="note">Chrome calls choosing a folder an "upload". Nothing leaves your computer.</p>
+    </fieldset>
+    <p id="sourceStatus" class="note" role="status">No updater loaded.</p>
+  </section>
+
+  <section>
+    <h2>2. Sounds</h2>
+    <fieldset id="curveControls" disabled>
+      <p><label><input type="checkbox" id="piano" autocomplete="off" checked> Make Toy play the hidden piano</label></p>
+      <h3>Velocity curves</h3>
+      <p>Check which velocity curves should be customized. Unchecked sounds keep their factory touch.</p>
+      <div id="rows"><p class="note">Load the updater to choose curves.</p></div>
+    </fieldset>
+    <div id="summary" role="status"><span id="summaryText">All factory.</span><br><span id="imageStatus" class="note"></span></div>
+  </section>
+
+  <section>
+    <h2>3. Flash</h2>
+    <p id="noMidi" class="bad" hidden>This browser has no Web MIDI. Use Chrome or Edge.</p>
+    <div class="actions">
+      <button id="connect">Connect</button>
+      <label>Port <select id="port" disabled><option value="">Not connected</option></select></label>
+    </div>
+    <p><label><input type="checkbox" id="confirmed" autocomplete="off"> This is the keyboard, it is in update mode, and the AC adaptor is in.</label></p>
+    <p class="note">Update mode: hold F#3, A3 and C#4 while switching on.</p>
+    <div class="actions">
+      <button id="send" class="primary" disabled>Send</button>
+      <button id="stop" disabled>Stop</button>
+      <button id="restore" disabled>Restore original</button>
+      <a id="download" class="note" hidden>Download image</a>
+    </div>
+    <p id="why" class="note"></p>
+    <progress id="progress" max="313" value="0" hidden></progress>
+    <p id="progressText" class="note" role="status"></p>
+    <div id="log" class="mono note"></div>
+  </section>
+</main>
+<script type="module" src="src/ui.js"></script>
+</body>
+</html>
